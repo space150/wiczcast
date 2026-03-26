@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>WiczCast — Weather Intelligence</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0a0e17">
+  <meta name="background-color" content="#0a0e17">
+
+  <!-- iOS / Apple -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="WiczCast">
+  <link rel="apple-touch-icon" href="assets/icon.svg">
+
+  <!-- Splash screens for iPhone -->
+  <meta name="apple-mobile-web-app-orientations" content="portrait">
+
+  <!-- General meta -->
+  <meta name="description" content="20-day weather forecast with multi-model ensemble intelligence from GFS, ECMWF, and military-grade sources">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+</head>
+<body>
+
+<!-- Loading Screen -->
+<div id="loading" class="loading-overlay">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">Initializing WiczCast</div>
+  <div class="loading-sources">
+    CONNECTING NOAA/GFS...<br>
+    SYNCING ECMWF/IFS...<br>
+    QUERYING NAM · HRRR · ICON...<br>
+    DECRYPTING FNMOC/NAVGEM...<br>
+    LINKING 557TH WEATHER WING...
+  </div>
+</div>
+
+<!-- Scanline -->
+<div class="scanline"></div>
+
+<!-- Background -->
+<div class="bg-grid"></div>
+<div class="bg-radial"></div>
+
+<!-- Overlay for notification panel -->
+<div id="overlay" class="overlay"></div>
+
+<!-- Notification Panel -->
+<div id="notif-panel" class="notification-panel">
+  <div class="notif-header">
+    <div class="notif-title">ALERTS</div>
+    <button id="notif-close" class="notif-close">✕</button>
+  </div>
+  <div id="notif-list" class="notif-list"></div>
+  <div class="notif-settings">
+    <div class="notif-toggle">
+      <span class="notif-toggle-label">Push Notifications</span>
+      <div id="notif-toggle" class="toggle-switch on">
+        <div class="toggle-knob"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Chat Panel -->
+<div id="chat-panel" class="chat-panel">
+  <div class="chat-header">
+    <div class="chat-header-left">
+      <div class="chat-ai-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="#00f0ff" stroke-width="1.5" fill="rgba(0,240,255,0.06)"/>
+          <circle cx="12" cy="12" r="4" stroke="#00f0ff" stroke-width="1" fill="rgba(0,240,255,0.1)"/>
+          <circle cx="12" cy="12" r="1.5" fill="#00f0ff"/>
+          <line x1="12" y1="2" x2="12" y2="8" stroke="#00f0ff" stroke-width="0.8" opacity="0.4"/>
+          <line x1="12" y1="16" x2="12" y2="22" stroke="#00f0ff" stroke-width="0.8" opacity="0.4"/>
+          <line x1="2" y1="12" x2="8" y2="12" stroke="#00f0ff" stroke-width="0.8" opacity="0.4"/>
+          <line x1="16" y1="12" x2="22" y2="12" stroke="#00f0ff" stroke-width="0.8" opacity="0.4"/>
+        </svg>
+      </div>
+      <div>
+        <div class="chat-title">WEATHER AI</div>
+        <div class="chat-subtitle">Meteorological Analysis</div>
+      </div>
+    </div>
+    <button id="chat-close" class="notif-close">✕</button>
+  </div>
+  <div id="chat-messages" class="chat-messages"></div>
+  <div class="chat-input-area">
+    <input type="text" id="chat-input" class="chat-input" placeholder="Ask about the forecast..." autocomplete="off">
+    <button id="chat-send" class="chat-send">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M2 14l12-6L2 2v5l8 1-8 1v5z" fill="currentColor"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<!-- App -->
+<div class="app">
+
+  <!-- Header -->
+  <header class="header">
+    <div class="logo-group">
+      <div class="logo-icon">
+        <svg viewBox="0 0 32 32" fill="none">
+          <path d="M16 2L4 10v12l12 8 12-8V10L16 2z" stroke="url(#g1)" stroke-width="1.5" fill="none"/>
+          <path d="M16 6l-8 5v10l8 5 8-5V11l-8-5z" stroke="url(#g1)" stroke-width="0.8" fill="rgba(0,240,255,0.04)"/>
+          <circle cx="16" cy="16" r="4" stroke="#00f0ff" stroke-width="1" fill="rgba(0,240,255,0.1)"/>
+          <circle cx="16" cy="16" r="1.5" fill="#00f0ff"/>
+          <line x1="16" y1="12" x2="16" y2="6" stroke="#00f0ff" stroke-width="0.6" opacity="0.5"/>
+          <line x1="16" y1="20" x2="16" y2="26" stroke="#00f0ff" stroke-width="0.6" opacity="0.5"/>
+          <line x1="12" y1="16" x2="4" y2="16" stroke="#00f0ff" stroke-width="0.6" opacity="0.3"/>
+          <line x1="20" y1="16" x2="28" y2="16" stroke="#00f0ff" stroke-width="0.6" opacity="0.3"/>
+          <defs>
+            <linearGradient id="g1" x1="4" y1="2" x2="28" y2="30">
+              <stop stop-color="#00f0ff"/>
+              <stop offset="1" stop-color="#3b82f6"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <div>
+        <div class="logo-text">WiczCast</div>
+        <div class="logo-sub">Weather Intelligence System</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="status-badge">
+        <span class="status-dot"></span>
+        <span id="model-count">7 Models Active</span>
+      </div>
+      <button id="chat-btn" class="notification-btn chat-btn" title="Weather AI">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M2 2h12v9H5l-3 3V2z" stroke="currentColor" stroke-width="1.2" fill="none"/>
+          <circle cx="5.5" cy="6.5" r="0.8" fill="currentColor"/>
+          <circle cx="8" cy="6.5" r="0.8" fill="currentColor"/>
+          <circle cx="10.5" cy="6.5" r="0.8" fill="currentColor"/>
+        </svg>
+        <span class="chat-ai-dot"></span>
+      </button>
+      <button id="notif-btn" class="notification-btn">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M8 1.5a4.5 4.5 0 0 0-4.5 4.5v3L2 11v1h12v-1l-1.5-2V6A4.5 4.5 0 0 0 8 1.5z" stroke="currentColor" stroke-width="1.2"/>
+          <path d="M6 13a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.2"/>
+        </svg>
+        <span id="notif-badge" class="badge" style="display:none">0</span>
+      </button>
+      <div id="last-update" class="last-update">UPD --:-- CT</div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <div class="main-content">
+
+    <!-- Hero Section -->
+    <div id="hero-section" class="hero-section">
+      <div class="hero-location" id="location-search-container">
+        <span id="location-display" class="location-display-text">MINNEAPOLIS, MN · 44.98°N 93.27°W</span>
+        <button id="location-search-btn" class="location-search-btn" title="Change location" aria-label="Search location">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+            <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.5"/>
+            <line x1="10.5" y1="10.5" x2="15" y2="15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <input type="text" id="location-search-input" class="location-search-input" placeholder="Search city or enter coordinates..." autocomplete="off" spellcheck="false" style="display:none;">
+        <div id="location-search-results" class="location-search-results" style="display:none;"></div>
+      </div>
+      <div id="current-temp" class="hero-temp">--°</div>
+      <div class="hero-desc">
+        <span id="current-icon" class="hero-icon"></span>
+        <span id="current-desc" class="hero-desc-text">Loading...</span>
+      </div>
+      <div id="current-feels" class="hero-hilo">--</div>
+    </div>
+
+    <!-- Models -->
+    <div class="glass-card source-panel">
+      <div class="section-header">
+        <span class="section-title">Models</span>
+        <span class="section-line"></span>
+      </div>
+      <div class="source-bar">
+        <span class="source-tag active" data-model="gfs_seamless" title="NOAA Global Forecast System — National Centers for Environmental Prediction">GFS</span>
+        <span class="source-tag active" data-model="ecmwf_ifs025" title="European Centre for Medium-Range Weather Forecasts — Integrated Forecasting System">ECMWF</span>
+        <span class="source-tag active" data-model="nam_seamless" title="North American Mesoscale Model — NOAA/NCEP 12km Resolution">NAM</span>
+        <span class="source-tag active" data-model="hrrr" title="High-Resolution Rapid Refresh — NOAA 3km Hourly Updates">HRRR</span>
+        <span class="source-tag active" data-model="icon_seamless" title="Icosahedral Nonhydrostatic Model — Deutscher Wetterdienst (German Weather Service)">ICON</span>
+        <span class="source-tag active" data-model="gem_seamless" title="Global Environmental Multiscale Model — Canadian Meteorological Centre">GEM</span>
+        <span class="source-tag active" data-model="jma_seamless" title="Global Spectral Model — Japan Meteorological Agency">JMA</span>
+        <span class="source-tag mil active" data-model="fnmoc_seamless" title="Fleet Numerical Meteorology & Oceanography Center — U.S. Navy NAVGEM">FNMOC</span>
+        <span class="source-tag mil active" data-model="557ww" title="557th Weather Wing — U.S. Air Force Global Weather Operations">557TH WW</span>
+        <span class="source-tag active" data-model="wmo_gpc" title="World Meteorological Organization — Global Producing Centres for Long-Range Forecasts">WMO</span>
+        <span class="source-tag active" data-model="noaa_cfs" title="National Oceanic and Atmospheric Administration — Climate Forecast System">NOAA</span>
+      </div>
+    </div>
+
+    <!-- Alert Banner -->
+    <div id="alert-banner" class="alert-banner hidden">
+      <span class="alert-icon">⚠️</span>
+      <span id="alert-text" class="alert-text"></span>
+      <span class="alert-tag">Active</span>
+    </div>
+
+    <!-- Hourly Forecast -->
+    <div class="glass-card">
+      <div class="section-header">
+        <span class="section-title">Hourly Forecast</span>
+        <span class="section-line"></span>
+      </div>
+      <div id="hourly-strip" class="hourly-strip"></div>
+    </div>
+
+    <!-- 20-Day Forecast -->
+    <div class="glass-card">
+      <div class="section-header">
+        <span class="section-title">20-Day Forecast</span>
+        <span class="section-line"></span>
+      </div>
+      <div id="forecast-list" class="forecast-list"></div>
+    </div>
+
+    <!-- Detail Cards -->
+    <div>
+      <div class="section-header">
+        <span class="section-title">Details</span>
+        <span class="section-line"></span>
+      </div>
+      <div class="detail-cards">
+        <div class="detail-card glass-card">
+          <div class="detail-card-label">Wind</div>
+          <div id="detail-wind" class="detail-card-value">-- mph</div>
+          <div id="detail-wind-sub" class="detail-card-sub">-- gusts · --</div>
+        </div>
+        <div class="detail-card glass-card">
+          <div class="detail-card-label">Humidity</div>
+          <div id="detail-humidity" class="detail-card-value">--%</div>
+          <div id="detail-humidity-sub" class="detail-card-sub">Dew point --°</div>
+        </div>
+        <div class="detail-card glass-card">
+          <div class="detail-card-label">Pressure</div>
+          <div id="detail-pressure" class="detail-card-value">-- mb</div>
+          <div id="detail-pressure-sub" class="detail-card-sub">--</div>
+        </div>
+        <div class="detail-card glass-card">
+          <div class="detail-card-label">UV Index</div>
+          <div id="detail-uv" class="detail-card-value">--</div>
+          <div id="detail-uv-sub" class="detail-card-sub">--</div>
+          <div class="detail-uv-bar">
+            <div id="detail-uv-fill" class="detail-uv-fill"></div>
+          </div>
+        </div>
+        <div class="detail-card glass-card">
+          <div class="detail-card-label">Precipitation</div>
+          <div id="detail-precip" class="detail-card-value">--"</div>
+          <div id="detail-precip-sub" class="detail-card-sub">-- % chance today</div>
+        </div>
+        <div class="detail-card glass-card">
+          <div class="detail-card-label">Feels Like</div>
+          <div id="detail-feels" class="detail-card-value">--°</div>
+          <div id="detail-feels-sub" class="detail-card-sub">--</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Temperature Chart -->
+    <div class="glass-card chart-section">
+      <div class="section-header">
+        <span class="section-title">Temperature</span>
+        <span class="section-line"></span>
+      </div>
+      <div class="chart-body">
+        <canvas id="chart-temp" class="chart-canvas"></canvas>
+      </div>
+    </div>
+
+    <!-- Precipitation Chart -->
+    <div class="glass-card chart-section">
+      <div class="section-header">
+        <span class="section-title">Precipitation</span>
+        <span class="section-line"></span>
+      </div>
+      <div class="chart-body">
+        <canvas id="chart-precip" class="chart-canvas"></canvas>
+      </div>
+    </div>
+
+    <!-- Wind Chart -->
+    <div class="glass-card chart-section">
+      <div class="section-header">
+        <span class="section-title">Wind</span>
+        <span class="section-line"></span>
+      </div>
+      <div class="chart-body">
+        <canvas id="chart-wind" class="chart-canvas"></canvas>
+      </div>
+    </div>
+
+    <!-- Confidence -->
+    <div class="glass-card confidence-section">
+      <div class="section-header">
+        <span class="section-title">Confidence</span>
+        <span class="section-line"></span>
+      </div>
+      <div class="confidence-row">
+        <canvas id="confidence-ring" class="confidence-ring"></canvas>
+        <div class="confidence-info">
+          <div class="confidence-label">Forecast Confidence</div>
+          <div id="confidence-desc" class="confidence-desc">Calculating model consensus...</div>
+          <div id="confidence-sources" class="confidence-sources">-- SOURCES · -- MIL-GRADE</div>
+        </div>
+      </div>
+      <div class="chart-body">
+        <canvas id="chart-confidence" class="chart-canvas"></canvas>
+      </div>
+    </div>
+
+    <!-- Thermal Map -->
+    <div class="glass-card map-section">
+      <div class="section-header">
+        <span class="section-title">Thermal Map</span>
+        <span class="section-line"></span>
+      </div>
+      <div id="map-container" class="map-container">
+        <div id="map" class="map-view"></div>
+      </div>
+      <div class="map-slider-row">
+        <input type="range" id="map-day-slider" class="map-slider" min="0" max="19" value="0" step="1">
+        <div class="map-slider-info">
+          <span id="map-day-label" class="map-day-label">DAY 1 — TODAY</span>
+          <span id="map-temp-range" class="map-temp-range">--°F / --°F</span>
+        </div>
+      </div>
+      <button id="map-expand-btn" class="map-expand-btn" title="Fullscreen map">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8">
+          <polyline points="10,2 14,2 14,6"/>
+          <polyline points="6,14 2,14 2,10"/>
+          <line x1="14" y1="2" x2="9" y2="7"/>
+          <line x1="2" y1="14" x2="7" y2="9"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- The Unfucked Winter -->
+    <div class="glass-card">
+      <div class="section-header">
+        <span class="section-title">The Unfucked Winter</span>
+        <span class="section-line"></span>
+      </div>
+      <div class="enso-clock-line" id="enso-clock-line">UNFUCKED AS OF --</div>
+      <div class="enso-panel-simple">
+        <div class="enso-globe-row">
+          <div class="enso-globe-wrapper">
+            <canvas id="enso-globe-canvas" class="enso-globe-canvas"></canvas>
+          </div>
+          <div class="enso-globe-data">
+            <div class="enso-globe-phase" id="enso-globe-phase">--</div>
+            <div class="enso-globe-oni-row">
+              <span class="enso-globe-oni-label">ONI</span>
+              <span class="enso-globe-oni-value" id="enso-globe-oni">--</span>
+            </div>
+            <div class="enso-globe-phase-odds">
+              <div class="enso-globe-odds-title">WINTER 2026–27 OUTLOOK</div>
+              <div class="enso-globe-odds-row">
+                <span class="enso-odds-label">RECORD WARM</span>
+                <span class="enso-odds-value" id="enso-odds-record">--%</span>
+              </div>
+              <div class="enso-globe-odds-row">
+                <span class="enso-odds-label">ABOVE AVG</span>
+                <span class="enso-odds-value" id="enso-odds-above">--%</span>
+              </div>
+              <div class="enso-globe-odds-row">
+                <span class="enso-odds-label">AVG TEMP</span>
+                <span class="enso-odds-value" id="enso-odds-temp">--°F</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="enso-globe-source" id="enso-globe-source">SOURCE: NOAA CPC · OPEN-METEO MARINE</div>
+      </div>
+    </div>
+
+    <!-- 200:1 Betting Window -->
+    <div class="glass-card">
+      <div class="section-header">
+        <span class="section-title">200:1 Bet Window</span>
+        <span class="section-line"></span>
+      </div>
+      <div class="bet-panel">
+        <div class="bet-description">
+          <div class="bet-odds">200:1</div>
+          <div class="bet-terms">
+            <p class="bet-headline">Will Winter 2026–27 be the <span class="bet-highlight-warm">warmest on record</span>?</p>
+            <p class="bet-detail">I say it will. Put your dollar where your mouth is, chumperton.</p>
+            <div class="bet-payout-grid">
+              <div class="bet-payout-row">
+                <span class="bet-payout-label">IF I WIN</span>
+                <span class="bet-payout-value bet-highlight-warm">You pay me $200</span>
+              </div>
+              <div class="bet-payout-row">
+                <span class="bet-payout-label">IF I LOSE</span>
+                <span class="bet-payout-value bet-highlight-cold">I pay you $1</span>
+              </div>
+            </div>
+            <p class="bet-fine-print">Settlement after Winter 2027 ends (March 1, 2027). Based on NOAA DJF US avg temp.</p>
+          </div>
+        </div>
+        <form class="bet-form" id="bet-form">
+          <div class="bet-input-row">
+            <input type="text" id="bet-name" class="bet-input" placeholder="YOUR NAME" required autocomplete="name" />
+            <input type="email" id="bet-email" class="bet-input" placeholder="YOUR EMAIL" required autocomplete="email" />
+          </div>
+          <button type="submit" class="bet-submit" id="bet-submit">
+            <span class="bet-submit-text">LOCK IT IN</span>
+          </button>
+        </form>
+        <div class="bet-confirmation" id="bet-confirmation" style="display:none;">
+          <span class="bet-confirmed-icon">&#10003;</span>
+          <span class="bet-confirmed-text">BET LOCKED. SEE YOU IN MARCH 2027, GREASHOUSER.</span>
+        </div>
+        <div class="bet-count" id="bet-count"></div>
+      </div>
+    </div>
+
+    <!-- Footer Spacer -->
+    <div style="height: 60px;"></div>
+
+  </div>
+</div>
+
+<!-- Fullscreen Map Overlay -->
+<div id="map-fullscreen" class="map-fullscreen">
+  <div class="map-fs-header">
+    <div class="map-fs-title">
+      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="8" cy="8" r="6"/>
+        <line x1="8" y1="2" x2="8" y2="14"/>
+        <line x1="2" y1="8" x2="14" y2="8"/>
+        <ellipse cx="8" cy="8" rx="3" ry="6"/>
+      </svg>
+      <span>THERMAL MAP</span>
+      <span id="map-fs-city" class="map-fs-city"></span>
+    </div>
+    <button id="map-fs-close" class="map-fs-close" title="Exit fullscreen">
+      <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="4" y1="4" x2="12" y2="12"/>
+        <line x1="12" y1="4" x2="4" y2="12"/>
+      </svg>
+    </button>
+  </div>
+  <div id="map-fs-body" class="map-fs-body"></div>
+  <div class="map-fs-controls">
+    <div id="map-fs-slider-row" class="map-fs-slider-row"></div>
+  </div>
+</div>
+
+<!-- Install Banner -->
+<div id="install-banner" class="install-banner" style="display:none;">
+  <div class="install-content">
+    <div class="install-icon">
+      <svg viewBox="0 0 32 32" width="28" height="28" fill="none">
+        <polygon points="16,4 27,10 27,22 16,28 5,22 5,10" stroke="#00f0ff" stroke-width="1.2" fill="rgba(0,240,255,0.05)"/>
+        <circle cx="16" cy="16" r="3" fill="#00f0ff"/>
+        <text x="16" y="18.5" text-anchor="middle" font-family="Arial Black" font-weight="900" font-size="8" fill="white">W</text>
+      </svg>
+    </div>
+    <div class="install-text">
+      <div class="install-title">Install WiczCast</div>
+      <div class="install-desc">Add to home screen for the full experience</div>
+    </div>
+    <button id="install-btn" class="install-btn">INSTALL</button>
+    <button id="install-dismiss" class="install-dismiss">✕</button>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

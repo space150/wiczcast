@@ -1,0 +1,27 @@
+{
+  "name": "WiczCast — Weather Intelligence",
+  "short_name": "WiczCast",
+  "description": "20-day weather forecasting with multi-model ensemble intelligence from GFS, ECMWF, FNMOC & military-grade sources.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0e17",
+  "theme_color": "#0a0e17",
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["weather", "utilities"],
+  "lang": "en-US"
+}

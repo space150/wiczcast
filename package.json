@@ -1,0 +1,14 @@
+{
+  "name": "wiczcast",
+  "version": "1.0.0",
+  "description": "WiczCast Weather Intelligence with Claude AI Chat",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "dotenv": "^16.4.0"
+  }
+}

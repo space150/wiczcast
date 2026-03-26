@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head><title>WiczCast Icon Generator</title></head>
+<body style="background:#222;color:#fff;font-family:sans-serif;padding:40px;">
+<h2>WiczCast Icon Generator</h2>
+<p>Right-click each image below and "Save Image As..." to save the icons.</p>
+<h3>192x192</h3>
+<canvas id="c192" width="192" height="192"></canvas>
+<h3>512x512</h3>
+<canvas id="c512" width="512" height="512"></canvas>
+<h3>180x180 (Apple Touch)</h3>
+<canvas id="c180" width="180" height="180"></canvas>
+<script>
+function drawIcon(canvas) {
+  const s = canvas.width;
+  const ctx = canvas.getContext('2d');
+
+  // Background
+  ctx.fillStyle = '#0a0e17';
+  ctx.fillRect(0, 0, s, s);
+
+  // Outer glow circle
+  const grd = ctx.createRadialGradient(s/2, s/2, s*0.1, s/2, s/2, s*0.45);
+  grd.addColorStop(0, 'rgba(0, 240, 255, 0.12)');
+  grd.addColorStop(1, 'rgba(0, 240, 255, 0)');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, s, s);
+
+  const cx = s / 2;
+  const cy = s / 2;
+
+  // Hexagon outer
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = (Math.PI / 3) * i - Math.PI / 2;
+    const x = cx + s * 0.35 * Math.cos(a);
+    const y = cy + s * 0.35 * Math.sin(a);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.strokeStyle = '#00f0ff';
+  ctx.lineWidth = s * 0.012;
+  ctx.stroke();
+
+  // Hexagon inner
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = (Math.PI / 3) * i - Math.PI / 2;
+    const x = cx + s * 0.22 * Math.cos(a);
+    const y = cy + s * 0.22 * Math.sin(a);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.strokeStyle = 'rgba(0, 240, 255, 0.4)';
+  ctx.lineWidth = s * 0.006;
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(0, 240, 255, 0.03)';
+  ctx.fill();
+
+  // Center circle
+  ctx.beginPath();
+  ctx.arc(cx, cy, s * 0.08, 0, Math.PI * 2);
+  ctx.strokeStyle = '#00f0ff';
+  ctx.lineWidth = s * 0.008;
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(0, 240, 255, 0.1)';
+  ctx.fill();
+
+  // Center dot
+  ctx.beginPath();
+  ctx.arc(cx, cy, s * 0.03, 0, Math.PI * 2);
+  ctx.fillStyle = '#00f0ff';
+  ctx.fill();
+
+  // Cross lines
+  ctx.strokeStyle = 'rgba(0, 240, 255, 0.35)';
+  ctx.lineWidth = s * 0.005;
+  // Vertical
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - s * 0.08);
+  ctx.lineTo(cx, cy - s * 0.35);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx, cy + s * 0.08);
+  ctx.lineTo(cx, cy + s * 0.35);
+  ctx.stroke();
+  // Horizontal
+  ctx.beginPath();
+  ctx.moveTo(cx - s * 0.08, cy);
+  ctx.lineTo(cx - s * 0.35, cy);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx + s * 0.08, cy);
+  ctx.lineTo(cx + s * 0.35, cy);
+  ctx.stroke();
+
+  // "W" letterform
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold ${s * 0.18}px "Arial Black", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('W', cx, cy + s * 0.005);
+
+  // Bottom label
+  ctx.fillStyle = 'rgba(0, 240, 255, 0.7)';
+  ctx.font = `bold ${s * 0.055}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText('WICZCAST', cx, cy + s * 0.42);
+}
+
+drawIcon(document.getElementById('c192'));
+drawIcon(document.getElementById('c512'));
+drawIcon(document.getElementById('c180'));
+</script>
+</body>
+</html>

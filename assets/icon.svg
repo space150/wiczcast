@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="80" fill="#0a0e17"/>
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="50%" r="45%">
+      <stop offset="0%" stop-color="#00f0ff" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#00f0ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="hex-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f0ff"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#glow)"/>
+  <!-- Outer hexagon -->
+  <polygon points="256,77 411,167 411,345 256,435 101,345 101,167" fill="none" stroke="url(#hex-grad)" stroke-width="5"/>
+  <!-- Inner hexagon -->
+  <polygon points="256,143 358,202 358,310 256,369 154,310 154,202" fill="rgba(0,240,255,0.03)" stroke="rgba(0,240,255,0.4)" stroke-width="2.5"/>
+  <!-- Center circle -->
+  <circle cx="256" cy="256" r="41" fill="rgba(0,240,255,0.1)" stroke="#00f0ff" stroke-width="3.5"/>
+  <!-- Center dot -->
+  <circle cx="256" cy="256" r="15" fill="#00f0ff"/>
+  <!-- Cross lines -->
+  <line x1="256" y1="215" x2="256" y2="77" stroke="rgba(0,240,255,0.35)" stroke-width="2.5"/>
+  <line x1="256" y1="297" x2="256" y2="435" stroke="rgba(0,240,255,0.35)" stroke-width="2.5"/>
+  <line x1="215" y1="256" x2="101" y2="256" stroke="rgba(0,240,255,0.35)" stroke-width="2.5"/>
+  <line x1="297" y1="256" x2="411" y2="256" stroke="rgba(0,240,255,0.35)" stroke-width="2.5"/>
+  <!-- W letter -->
+  <text x="256" y="272" text-anchor="middle" font-family="Arial Black, sans-serif" font-weight="900" font-size="110" fill="white">W</text>
+  <!-- Label -->
+  <text x="256" y="470" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="30" fill="rgba(0,240,255,0.7)">WICZCAST</text>
+</svg>

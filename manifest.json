@@ -1,0 +1,7 @@
+{
+  "name": "WiczCast the only way to see weather misery before its here",
+  "author": "wjj",
+  "version": "1.0.0",
+  "entry": "project-folder/index.html",
+  "description": "this is a 20 day weather forcasting app that is the most accurate pulling from military data"
+}
