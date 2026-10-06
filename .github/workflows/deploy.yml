@@ -50,7 +50,6 @@ jobs:
             --region "${REGION}" \
             --image "${IMAGE}:${GITHUB_SHA}" \
             --service-account "${RUNTIME_SA}" \
-            --set-secrets "ANTHROPIC_API_KEY=anthropic-api-key:latest" \
             --port 8080 \
             --cpu 1 \
             --memory 512Mi \

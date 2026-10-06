@@ -1,6 +1,5 @@
 const express = require('express');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env'), override: true });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -36,11 +35,8 @@ for (const dir of PUBLIC_DIRS) {
 
 app.get('/healthz', (req, res) => res.type('text').send('ok'));
 
-// Parse JSON bodies
-app.use(express.json({ limit: '64kb' }));
-
 // Simple in-memory per-IP rate limiter. Per-instance only (Cloud Run may run several
-// instances), so it's a speed bump against abuse of the Claude proxy, not a hard quota.
+// instances), so it's a speed bump against abuse of the ENSO proxy, not a hard quota.
 function rateLimit({ windowMs, max }) {
   const hits = new Map();
   setInterval(() => {
@@ -63,107 +59,6 @@ function rateLimit({ windowMs, max }) {
     next();
   };
 }
-
-// Reject cross-site browser calls to the API (other sites embedding our key-backed proxy).
-function sameOriginOnly(req, res, next) {
-  const origin = req.get('origin');
-  if (origin) {
-    try {
-      if (new URL(origin).host !== req.get('host')) {
-        return res.status(403).json({ error: 'Cross-origin requests not allowed' });
-      }
-    } catch {
-      return res.status(403).json({ error: 'Bad origin' });
-    }
-  }
-  next();
-}
-
-const CHAT_MAX_MESSAGES = 20;
-const CHAT_MAX_MESSAGE_CHARS = 4000;
-const CHAT_MAX_SYSTEM_CHARS = 20000;
-
-function validateChat(body) {
-  const { messages, system } = body || {};
-  if (!Array.isArray(messages) || messages.length === 0 || messages.length > CHAT_MAX_MESSAGES) {
-    return 'messages must be a non-empty array of at most ' + CHAT_MAX_MESSAGES;
-  }
-  for (const m of messages) {
-    if (!m || (m.role !== 'user' && m.role !== 'assistant')) return 'invalid message role';
-    if (typeof m.content !== 'string' || m.content.length > CHAT_MAX_MESSAGE_CHARS) {
-      return 'message content must be a string of at most ' + CHAT_MAX_MESSAGE_CHARS + ' chars';
-    }
-  }
-  if (system !== undefined && (typeof system !== 'string' || system.length > CHAT_MAX_SYSTEM_CHARS)) {
-    return 'system must be a string of at most ' + CHAT_MAX_SYSTEM_CHARS + ' chars';
-  }
-  return null;
-}
-
-// POST /api/chat — Proxy to Anthropic Messages API with streaming
-app.post('/api/chat', sameOriginOnly, rateLimit({ windowMs: 60_000, max: 10 }), async (req, res) => {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: 'API key not configured' });
-  }
-
-  const invalid = validateChat(req.body);
-  if (invalid) {
-    return res.status(400).json({ error: invalid });
-  }
-  // Only forward the fields we expect — never arbitrary client-supplied properties.
-  const messages = req.body.messages.map(({ role, content }) => ({ role, content }));
-  const system = req.body.system;
-
-  try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1024,
-        system: system || '',
-        messages,
-        stream: true,
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('Anthropic API error:', response.status, errText);
-      // Don't leak upstream error details to the browser.
-      return res.status(502).json({ error: 'Claude API request failed' });
-    }
-
-    // Stream SSE back to the client
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      res.write(chunk);
-    }
-
-    res.end();
-  } catch (err) {
-    console.error('Proxy error:', err);
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed to reach Claude API' });
-    } else {
-      res.end();
-    }
-  }
-});
 
 // GET /api/enso/* — Proxy ENSO API calls to avoid CORS issues.
 // Only the endpoints the front end uses are forwarded.
