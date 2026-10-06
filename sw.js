@@ -1,5 +1,5 @@
-// WiczCast Service Worker v5.0.0
-const CACHE_NAME = 'wiczcast-v5.0.0';
+// WiczCast Service Worker v5.1.0
+const CACHE_NAME = 'wiczcast-v5.1.0';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -39,7 +39,7 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Same-origin API calls (Claude chat proxy): network only, no caching
+  // Same-origin API calls (ENSO proxy): network only, no caching
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(fetch(event.request));
     return;
