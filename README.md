@@ -26,7 +26,7 @@ The workflow can also be run manually from the Actions tab (`workflow_dispatch`,
 1. Authenticates to GCP with **Workload Identity Federation** (OIDC, no JSON keys stored in GitHub).
 2. Builds the `Dockerfile` and pushes `…/wiczcast/wiczcast:<git sha>` to Artifact Registry.
 3. `gcloud run deploy` with the runtime service account and scaling limits.
-4. Smoke-tests `GET /healthz` on the service URL.
+4. Smoke-tests `GET /health` (not `/healthz` — Cloud Run reserves paths ending in `z`) on the service URL.
 
 All GCP identifiers are plain `env:` values at the top of the workflow — none of them are secrets. There are no GitHub repository secrets.
 
