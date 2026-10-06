@@ -604,6 +604,87 @@ body {
 .fc-conf-pill.conf-low { color: var(--accent-orange); background: rgba(249, 115, 22, 0.1); }
 .fc-conf-pill.conf-crit { color: var(--accent-red); background: rgba(239, 68, 68, 0.1); }
 
+/* ─── HISTORICAL ACCURACY (Past Day Rows) ─── */
+.forecast-row-past {
+  opacity: 0.7;
+  border-left: 2px solid rgba(139, 92, 246, 0.3);
+  padding-left: 8px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.forecast-row-past:hover,
+.forecast-row-past.expanded { opacity: 0.9; }
+
+.fc-temp-bar-actual {
+  position: absolute;
+  top: -2px;
+  height: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.fc-accuracy-pill {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 8px;
+  width: 32px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.fc-accuracy-pill.grade-a { color: var(--accent-green); background: rgba(16, 185, 129, 0.15); }
+.fc-accuracy-pill.grade-b { color: var(--accent-cyan); background: rgba(0, 240, 255, 0.1); }
+.fc-accuracy-pill.grade-c { color: var(--accent-yellow); background: rgba(251, 191, 36, 0.1); }
+.fc-accuracy-pill.grade-d { color: var(--accent-orange); background: rgba(249, 115, 22, 0.1); }
+.fc-accuracy-pill.grade-f { color: var(--accent-red); background: rgba(239, 68, 68, 0.1); }
+.fc-accuracy-pill.grade-pending { color: var(--text-dim); background: rgba(255, 255, 255, 0.04); font-size: 11px; }
+
+.fc-past-detail {
+  padding: 6px 12px 10px 20px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-left: 2px solid rgba(139, 92, 246, 0.15);
+  animation: fadeSlide 0.2s ease-out;
+}
+@keyframes fadeSlide {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fc-past-detail-row {
+  display: flex;
+  gap: 10px;
+  padding: 2px 0;
+}
+.fc-past-detail-label {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--accent-purple);
+  width: 75px;
+  flex-shrink: 0;
+}
+
+.fc-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+.fc-divider-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+}
+.fc-divider-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: var(--accent-cyan);
+}
+
 /* ─── DETAIL CARDS ─── */
 .detail-cards {
   display: grid;
@@ -1556,6 +1637,9 @@ body {
   .fc-temp-lo { font-size: 15px; }
   .fc-precip { font-size: 13px; width: 28px; }
   .fc-conf-pill { display: none; }
+  .fc-accuracy-pill { font-size: 11px; width: 26px; }
+  .fc-past-detail { font-size: 11px; padding-left: 12px; }
+  .fc-past-detail-label { width: 60px; font-size: 9px; }
 
   .detail-card-value { font-size: 22px; }
   .detail-card { min-height: 90px; }

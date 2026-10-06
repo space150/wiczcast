@@ -136,6 +136,29 @@ let rawPrimary = null;
 let rawEnsemble = {};
 let rawClimateNormals = null; // { avgHi: [], avgLo: [] } indexed by forecast day
 
+// ─── HISTORICAL ACCURACY STATE ───
+let pastObservations = null;  // cached archive API response
+let storedPredictions = null; // cached localStorage predictions
+
+// ─── WMO CONDITION GROUPS (for accuracy scoring) ───
+const WMO_GROUPS = {
+  clear: [0, 1],
+  cloudy: [2, 3],
+  fog: [45, 48],
+  drizzle: [51, 53, 55],
+  freezing: [56, 57, 66, 67],
+  rain: [61, 63, 65, 80, 81, 82],
+  snow: [71, 73, 75, 77, 85, 86],
+  storm: [95, 96, 99],
+};
+
+const WMO_ADJACENT = {
+  clear: ['cloudy'], cloudy: ['clear', 'fog'],
+  fog: ['cloudy', 'drizzle'], drizzle: ['rain', 'fog'],
+  rain: ['drizzle', 'storm'], snow: ['freezing'],
+  freezing: ['snow', 'rain'], storm: ['rain'],
+};
+
 // Map data-model attributes to Open-Meteo API model IDs
 // FNMOC and 557WW aren't available on Open-Meteo — they're synthesized from ensemble spread
 const MODEL_API_MAP = {
@@ -282,6 +305,8 @@ async function changeLocation(result) {
 
   // Re-fetch all data for new location
   rawClimateNormals = null; // clear stale normals
+  pastObservations = null;  // clear stale past observations
+  storedPredictions = null;
   try {
     const [primary, ensemble] = await Promise.all([fetchWeatherData(), fetchEnsembleData()]);
     rawPrimary = primary;
@@ -706,6 +731,137 @@ function processData(primary, ensemble, activeModels, climateNormals) {
   };
 }
 
+// ─── HISTORICAL ACCURACY: PERSISTENCE & SCORING ───
+
+function getLocationKey() {
+  return `${currentLocation.lat.toFixed(2)},${currentLocation.lon.toFixed(2)}`;
+}
+
+function savePredictions(days) {
+  const key = 'wiczcast-predictions';
+  const locKey = getLocationKey();
+  let store = {};
+  try { store = JSON.parse(localStorage.getItem(key)) || {}; } catch (e) { store = {}; }
+  if (!store[locKey]) store[locKey] = {};
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
+  const cutoffStr = cutoff.toISOString().split('T')[0];
+
+  // Prune old entries
+  for (const date of Object.keys(store[locKey])) {
+    if (date < cutoffStr) delete store[locKey][date];
+  }
+
+  // Save new predictions (first-prediction-wins)
+  for (const day of days) {
+    if (!store[locKey][day.date]) {
+      store[locKey][day.date] = {
+        hi: day.hi, lo: day.lo, code: day.code, icon: day.icon,
+        precipProb: day.precipProb, precip: day.precip,
+        confidence: day.confidence, windMax: day.windMax,
+        savedAt: new Date().toISOString(),
+      };
+    }
+  }
+
+  try { localStorage.setItem(key, JSON.stringify(store)); } catch (e) { /* quota */ }
+}
+
+function loadPredictions() {
+  const key = 'wiczcast-predictions';
+  const locKey = getLocationKey();
+  try {
+    const store = JSON.parse(localStorage.getItem(key)) || {};
+    return store[locKey] || {};
+  } catch (e) { return {}; }
+}
+
+async function fetchPastObservations(startDate, endDate) {
+  try {
+    const params = new URLSearchParams({
+      latitude: currentLocation.lat,
+      longitude: currentLocation.lon,
+      start_date: startDate,
+      end_date: endDate,
+      daily: 'temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum,windspeed_10m_max',
+      temperature_unit: 'fahrenheit',
+      windspeed_unit: 'mph',
+      precipitation_unit: 'inch',
+      timezone: currentLocation.timezone || 'auto',
+    });
+    const resp = await fetch(`https://archive-api.open-meteo.com/v1/archive?${params}`);
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    // Index by date for easy lookup
+    const indexed = {};
+    if (data.daily && data.daily.time) {
+      for (let i = 0; i < data.daily.time.length; i++) {
+        indexed[data.daily.time[i]] = {
+          hi: Math.round(data.daily.temperature_2m_max[i]),
+          lo: Math.round(data.daily.temperature_2m_min[i]),
+          code: data.daily.weathercode[i],
+          icon: WMO_ICONS[data.daily.weathercode[i]] || '🌡️',
+          desc: WMO_DESC[data.daily.weathercode[i]] || 'Unknown',
+          precip: data.daily.precipitation_sum[i] || 0,
+          windMax: Math.round(data.daily.windspeed_10m_max[i] || 0),
+        };
+      }
+    }
+    return indexed;
+  } catch (e) {
+    console.warn('[History] Failed to fetch past observations:', e);
+    return null;
+  }
+}
+
+function getConditionScore(predCode, actualCode) {
+  if (predCode === actualCode) return 100;
+  const predGroup = Object.entries(WMO_GROUPS).find(([, codes]) => codes.includes(predCode))?.[0];
+  const actualGroup = Object.entries(WMO_GROUPS).find(([, codes]) => codes.includes(actualCode))?.[0];
+  if (!predGroup || !actualGroup) return 30;
+  if (predGroup === actualGroup) return 80;
+  if (WMO_ADJACENT[predGroup]?.includes(actualGroup)) return 50;
+  return 10;
+}
+
+function calculateAccuracy(predicted, actual) {
+  const hiDiff = Math.abs(predicted.hi - actual.hi);
+  const loDiff = Math.abs(predicted.lo - actual.lo);
+  const avgTempDiff = (hiDiff + loDiff) / 2;
+  const tempScore = Math.max(0, 100 - (avgTempDiff * 100 / 15));
+  const condScore = getConditionScore(predicted.code, actual.code);
+  const total = Math.round(tempScore * 0.6 + condScore * 0.4);
+  const grade = total >= 90 ? 'A' : total >= 75 ? 'B' : total >= 60 ? 'C' : total >= 40 ? 'D' : 'F';
+  return { score: total, grade, hiDiff, loDiff, tempScore: Math.round(tempScore), condScore };
+}
+
+function buildPastDays() {
+  const predictions = storedPredictions || loadPredictions();
+  if (!predictions || Object.keys(predictions).length === 0) return [];
+  const today = new Date().toISOString().split('T')[0];
+  const pastDates = Object.keys(predictions)
+    .filter(d => d < today)
+    .sort()
+    .slice(-14); // last 14 days max
+
+  return pastDates.map(date => {
+    const predicted = predictions[date];
+    const actual = pastObservations ? pastObservations[date] : null;
+    const d = new Date(date + 'T12:00:00');
+    const accuracy = actual ? calculateAccuracy(predicted, actual) : null;
+    return {
+      date,
+      dayName: DAY_NAMES[d.getDay()],
+      dayNum: d.getDate(),
+      month: d.getMonth() + 1,
+      predicted,
+      actual,
+      accuracy,
+    };
+  });
+}
+
 // ─── DETECT SIGNIFICANT CHANGES ───
 function detectChanges(newData) {
   if (!forecastData) return;
@@ -790,8 +946,13 @@ function renderApp() {
   // Hourly strip
   renderHourlyStrip(hourly);
 
-  // Forecast list
-  renderForecastList(days);
+  // Save predictions for historical accuracy tracking
+  savePredictions(days);
+  storedPredictions = loadPredictions();
+
+  // Forecast list (with past days if available)
+  const pastDays = buildPastDays();
+  renderForecastList(days, pastDays);
 
   // Detail cards
   renderDetailCards(current, days[0]);
@@ -854,31 +1015,110 @@ function renderHourlyStrip(hourly) {
 }
 
 // ─── FORECAST LIST (vertical, Apple Weather style) ───
-function renderForecastList(days) {
+function renderForecastList(days, pastDays) {
   const container = document.getElementById('forecast-list');
   if (!container) return;
 
-  // Compute global min/max for temperature bar scaling
-  const globalMin = Math.min(...days.map(d => d.lo));
-  const globalMax = Math.max(...days.map(d => d.hi));
+  // Collect all temps for global bar scaling (future + past predicted + past actual)
+  const allTemps = [];
+  days.forEach(d => { allTemps.push(d.lo, d.hi); });
+  if (pastDays) {
+    pastDays.forEach(p => {
+      allTemps.push(p.predicted.lo, p.predicted.hi);
+      if (p.actual) allTemps.push(p.actual.lo, p.actual.hi);
+    });
+  }
+  const globalMin = Math.min(...allTemps);
+  const globalMax = Math.max(...allTemps);
   const globalRange = globalMax - globalMin || 1;
 
-  container.innerHTML = days.map((day, idx) => {
+  function tempBarGradient(lo, hi) {
+    const midTemp = (hi + lo) / 2;
+    const tempRatio = (midTemp - globalMin) / globalRange;
+    return tempRatio < 0.3 ? 'linear-gradient(90deg, #3b82f6, #00f0ff)' :
+           tempRatio < 0.6 ? 'linear-gradient(90deg, #00f0ff, #10b981)' :
+           tempRatio < 0.8 ? 'linear-gradient(90deg, #10b981, #fbbf24)' :
+           'linear-gradient(90deg, #fbbf24, #f97316)';
+  }
+
+  let html = '';
+
+  // ── Past days ──
+  if (pastDays && pastDays.length > 0) {
+    pastDays.forEach(p => {
+      const pred = p.predicted;
+      const act = p.actual;
+      const leftPct = ((pred.lo - globalMin) / globalRange) * 100;
+      const widthPct = ((pred.hi - pred.lo) / globalRange) * 100;
+      const barGradient = tempBarGradient(pred.lo, pred.hi);
+
+      // Actual temp overlay on bar
+      let actualBarHtml = '';
+      if (act) {
+        const actLeftPct = ((act.lo - globalMin) / globalRange) * 100;
+        const actWidthPct = ((act.hi - act.lo) / globalRange) * 100;
+        actualBarHtml = `<div class="fc-temp-bar-actual" style="left:${actLeftPct}%;width:${Math.max(actWidthPct, 4)}%"></div>`;
+      }
+
+      // Accuracy pill or awaiting
+      let pillHtml;
+      if (p.accuracy) {
+        const gradeClass = `grade-${p.accuracy.grade.toLowerCase()}`;
+        pillHtml = `<div class="fc-accuracy-pill ${gradeClass}">${p.accuracy.grade}</div>`;
+      } else {
+        pillHtml = `<div class="fc-accuracy-pill grade-pending">...</div>`;
+      }
+
+      // Detail row (hidden by default)
+      let detailHtml = '';
+      if (act && p.accuracy) {
+        detailHtml = `<div class="fc-past-detail" data-date="${p.date}" style="display:none">
+          <div class="fc-past-detail-row">
+            <span class="fc-past-detail-label">PREDICTED</span>
+            <span>${pred.icon} ${pred.lo}°/${pred.hi}° · ${pred.precipProb}% precip</span>
+          </div>
+          <div class="fc-past-detail-row">
+            <span class="fc-past-detail-label">ACTUAL</span>
+            <span>${act.icon} ${act.lo}°/${act.hi}° · ${act.precip.toFixed(2)}" precip</span>
+          </div>
+          <div class="fc-past-detail-row">
+            <span class="fc-past-detail-label">ACCURACY</span>
+            <span>Temp ±${p.accuracy.hiDiff}°H ±${p.accuracy.loDiff}°L · Conditions ${p.accuracy.condScore}% · Score ${p.accuracy.score}/100</span>
+          </div>
+        </div>`;
+      }
+
+      html += `<div class="forecast-row forecast-row-past" data-date="${p.date}">
+        <div class="fc-day-label">${p.dayName}</div>
+        <div class="fc-icon">${pred.icon}</div>
+        <div class="fc-temp-lo">${pred.lo}°</div>
+        <div class="fc-temp-bar-track">
+          <div class="fc-temp-bar-fill" style="left:${leftPct}%;width:${Math.max(widthPct, 4)}%;background:${barGradient}"></div>
+          ${actualBarHtml}
+        </div>
+        <div class="fc-temp-hi">${pred.hi}°</div>
+        <div class="fc-precip">&nbsp;</div>
+        ${pillHtml}
+      </div>${detailHtml}`;
+    });
+
+    // Divider
+    html += `<div class="fc-divider">
+      <span class="fc-divider-line"></span>
+      <span class="fc-divider-label">TODAY</span>
+      <span class="fc-divider-line"></span>
+    </div>`;
+  }
+
+  // ── Future days ──
+  html += days.map((day, idx) => {
     const confClass = day.confidence >= 75 ? 'conf-high' :
                       day.confidence >= 50 ? 'conf-med' :
                       day.confidence >= 35 ? 'conf-low' : 'conf-crit';
 
-    // Temperature bar: position within global range
     const leftPct = ((day.lo - globalMin) / globalRange) * 100;
     const widthPct = ((day.hi - day.lo) / globalRange) * 100;
-
-    // Gradient color based on temperature (cold→warm)
-    const midTemp = (day.hi + day.lo) / 2;
-    const tempRatio = (midTemp - globalMin) / globalRange;
-    const barGradient = tempRatio < 0.3 ? 'linear-gradient(90deg, #3b82f6, #00f0ff)' :
-                        tempRatio < 0.6 ? 'linear-gradient(90deg, #00f0ff, #10b981)' :
-                        tempRatio < 0.8 ? 'linear-gradient(90deg, #10b981, #fbbf24)' :
-                        'linear-gradient(90deg, #fbbf24, #f97316)';
+    const barGradient = tempBarGradient(day.lo, day.hi);
 
     return `<div class="forecast-row">
       <div class="fc-day-label">${idx === 0 ? 'TODAY' : day.dayName}</div>
@@ -892,6 +1132,21 @@ function renderForecastList(days) {
       <div class="fc-conf-pill ${confClass}">${day.confidence}%</div>
     </div>`;
   }).join('');
+
+  container.innerHTML = html;
+
+  // Click-to-expand handlers for past rows
+  container.querySelectorAll('.forecast-row-past').forEach(row => {
+    row.addEventListener('click', () => {
+      const date = row.getAttribute('data-date');
+      const detail = container.querySelector(`.fc-past-detail[data-date="${date}"]`);
+      if (detail) {
+        const isOpen = detail.style.display !== 'none';
+        detail.style.display = isOpen ? 'none' : 'block';
+        row.classList.toggle('expanded', !isOpen);
+      }
+    });
+  });
 }
 
 // ─── DETAIL CARDS ───
@@ -1357,6 +1612,18 @@ async function init() {
       }, 5000);
     });
 
+    // Fetch past observations for historical accuracy (non-blocking)
+    const preds = loadPredictions();
+    const pastDates = Object.keys(preds).filter(d => d < new Date().toISOString().split('T')[0]).sort();
+    if (pastDates.length > 0) {
+      fetchPastObservations(pastDates[0], pastDates[pastDates.length - 1]).then(obs => {
+        if (obs) {
+          pastObservations = obs;
+          renderApp();
+        }
+      });
+    }
+
   } catch (err) {
     console.error('Failed to fetch weather data:', err);
     // Show error state
@@ -1470,6 +1737,18 @@ async function refreshData() {
     fetchENSOData().then(ensoData => {
       if (ensoData) renderENSOPanel(ensoData);
     }).catch(err => console.warn('[ENSO] Refresh failed:', err));
+
+    // Refresh past observations for historical accuracy
+    const preds = loadPredictions();
+    const pastDates = Object.keys(preds).filter(d => d < new Date().toISOString().split('T')[0]).sort();
+    if (pastDates.length > 0) {
+      fetchPastObservations(pastDates[0], pastDates[pastDates.length - 1]).then(obs => {
+        if (obs) {
+          pastObservations = obs;
+          renderApp();
+        }
+      });
+    }
   } catch (e) {
     console.error('Refresh failed:', e);
   }
