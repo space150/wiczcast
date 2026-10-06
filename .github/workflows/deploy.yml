@@ -1,0 +1,67 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [deploy]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-cloud-run
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: space150-wiczcast
+  REGION: us-central1
+  SERVICE: wiczcast
+  IMAGE: us-central1-docker.pkg.dev/space150-wiczcast/wiczcast/wiczcast
+  WIF_PROVIDER: projects/660393740189/locations/global/workloadIdentityPools/github/providers/wiczcast-repo
+  DEPLOYER_SA: github-deployer@space150-wiczcast.iam.gserviceaccount.com
+  RUNTIME_SA: wiczcast-run@space150-wiczcast.iam.gserviceaccount.com
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write # required for Workload Identity Federation
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and push image
+        run: |
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+          docker build -t "${IMAGE}:${GITHUB_SHA}" .
+          docker push "${IMAGE}:${GITHUB_SHA}"
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${SERVICE}" \
+            --project "${PROJECT_ID}" \
+            --region "${REGION}" \
+            --image "${IMAGE}:${GITHUB_SHA}" \
+            --service-account "${RUNTIME_SA}" \
+            --set-secrets "ANTHROPIC_API_KEY=anthropic-api-key:latest" \
+            --port 8080 \
+            --cpu 1 \
+            --memory 512Mi \
+            --min-instances 0 \
+            --max-instances 3 \
+            --concurrency 80 \
+            --timeout 300 \
+            --quiet
+
+      - name: Smoke test
+        run: |
+          URL=$(gcloud run services describe "${SERVICE}" --project "${PROJECT_ID}" --region "${REGION}" --format='value(status.url)')
+          echo "Service URL: ${URL}"
+          curl --fail --silent --show-error --retry 3 --retry-delay 5 "${URL}/healthz"
