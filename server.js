@@ -33,7 +33,8 @@ for (const dir of PUBLIC_DIRS) {
   app.use(`/${dir}`, express.static(path.join(__dirname, dir), staticOpts));
 }
 
-app.get('/healthz', (req, res) => res.type('text').send('ok'));
+// Not /healthz: Cloud Run's front end reserves some paths ending in "z" and 404s them.
+app.get('/health', (req, res) => res.type('text').send('ok'));
 
 // Simple in-memory per-IP rate limiter. Per-instance only (Cloud Run may run several
 // instances), so it's a speed bump against abuse of the ENSO proxy, not a hard quota.
