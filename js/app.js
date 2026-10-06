@@ -13,6 +13,13 @@ const DEFAULT_LOCATION = {
 
 let currentLocation = { ...DEFAULT_LOCATION };
 
+// Escape untrusted text (API data, model output, user input) before inserting as HTML.
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
 function getCoordStr() {
   const latDir = currentLocation.lat >= 0 ? 'N' : 'S';
   const lonDir = currentLocation.lon >= 0 ? 'E' : 'W';
@@ -239,7 +246,7 @@ function renderSearchResults(resultsList) {
     const pop = r.population ? `POP ${(r.population / 1000).toFixed(0)}K` : '';
     const coord = `${r.latitude.toFixed(2)}°${r.latitude >= 0 ? 'N' : 'S'} ${Math.abs(r.longitude).toFixed(2)}°${r.longitude >= 0 ? 'E' : 'W'}`;
     return `<div class="search-result" data-idx="${i}">
-      <div class="search-result-name">${city}${region ? ', ' + region : ''}${country ? ' · ' + country : ''}</div>
+      <div class="search-result-name">${escapeHtml(city)}${region ? ', ' + escapeHtml(region) : ''}${country ? ' · ' + escapeHtml(country) : ''}</div>
       <div class="search-result-meta">${coord}${pop ? ' · ' + pop : ''}</div>
     </div>`;
   }).join('');
@@ -1251,7 +1258,7 @@ function renderNotifications() {
   list.innerHTML = changeLog.map(c => `
     <div class="notif-item ${c.urgent ? 'urgent' : 'change'}">
       <div class="notif-time">${formatTime(c.time)}</div>
-      <div class="notif-msg">${c.msg}</div>
+      <div class="notif-msg">${escapeHtml(c.msg)}</div>
     </div>
   `).join('');
 }
@@ -2871,7 +2878,7 @@ function addBotMessage(text, instant) {
   msgs.appendChild(div);
 
   if (instant) {
-    bubble.innerHTML = text.replace(/\n/g, '<br>');
+    bubble.innerHTML = escapeHtml(text).replace(/\n/g, '<br>');
     msgs.scrollTop = msgs.scrollHeight;
     return;
   }
@@ -2895,7 +2902,7 @@ function addBotMessage(text, instant) {
       currentHTML += '<br>';
       charIdx++;
     } else {
-      currentHTML += ch;
+      currentHTML += escapeHtml(ch);
       charIdx++;
     }
 
@@ -2922,7 +2929,7 @@ function addUserMessage(text) {
   const div = document.createElement('div');
   div.className = 'chat-msg user';
   div.innerHTML = `
-    <div class="chat-msg-bubble">${text}</div>
+    <div class="chat-msg-bubble">${escapeHtml(text)}</div>
     <div class="chat-msg-time">${time}</div>
   `;
   msgs.appendChild(div);
@@ -3038,7 +3045,7 @@ async function streamClaudeResponse() {
         const parsed = JSON.parse(data);
         if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
           fullText += parsed.delta.text;
-          bubble.innerHTML = fullText.replace(/\n/g, '<br>');
+          bubble.innerHTML = escapeHtml(fullText).replace(/\n/g, '<br>');
           msgs.scrollTop = msgs.scrollHeight;
         }
       } catch (e) {
